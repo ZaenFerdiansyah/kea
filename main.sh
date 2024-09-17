@@ -225,4 +225,8 @@ psql -d hostdb -U kea -f /usr/share/kea/scripts/pgsql/dhcpdb_create.pgsql
 
 echo "Database schema loaded successfully."
 
+echo "Step 6: Restarting the Kea DHCP4 server..."
+systemctl restart isc-kea-dhcp4-server
+echo "Kea DHCP4 server restarted."
+
 echo "ISC Kea DHCP4 and PostgreSQL setup complete."
