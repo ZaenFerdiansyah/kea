@@ -1,12 +1,12 @@
 #!/bin/bash
 
-echo "Starting Kea DHCP4 server setup..."
+echo "Starting ISC Kea DHCP4 server and PostgreSQL setup..."
 
-# Update the package list and install necessary packages
-echo "Step 1: Installing required packages..."
+# ------------------- STEP 1: Kea DHCP4 Server Setup -------------------
+
+echo "Step 1: Installing required packages for ISC Kea..."
 apt update
 apt install curl apt-transport-https -y
-echo "Packages installed."
 
 # Add ISC Kea repository and install the DHCP4 server
 echo "Step 2: Adding ISC Kea repository and installing DHCP4 server..."
@@ -18,7 +18,6 @@ echo "ISC Kea DHCP4 server installed."
 echo "Step 3: Backing up the existing configuration..."
 cd /etc/kea/
 mv kea-dhcp4.conf kea-dhcp4.conf.bak
-echo "Configuration backup complete."
 
 # Create the new kea-dhcp4.conf configuration file
 echo "Step 4: Creating new Kea DHCP4 configuration..."
@@ -165,8 +164,64 @@ EOT
 echo "Python script created."
 
 # Make the Python script executable
-echo "Step 8: Making the Python script executable..."
 chmod +x /etc/kea/add.py
 echo "Python script is now executable."
 
-echo "Kea DHCP4 server setup complete. You can now use /etc/kea/add.py to insert host reservations."
+# ------------------- STEP 2: PostgreSQL Setup -------------------
+
+echo "Step 8: Adding PostgreSQL APT repository..."
+
+# Add PostgreSQL repository to sources list
+sudo sh -c 'echo "deb http://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list'
+
+# Import the repository signing key
+wget --quiet -O - https://www.postgresql.org/media/keys/ACCC4CF8.asc | sudo tee /etc/apt/trusted.gpg.d/postgresql.asc > /dev/null
+
+echo "PostgreSQL repository added."
+
+# Update the package lists
+echo "Step 9: Updating package lists and installing PostgreSQL..."
+sudo apt update
+
+# Install PostgreSQL
+sudo apt install postgresql -y
+
+# Restart PostgreSQL service
+sudo systemctl restart postgresql
+echo "PostgreSQL installed and restarted."
+
+# Switch to postgres user and create database and user
+echo "Step 10: Setting up PostgreSQL database and user..."
+
+sudo -u postgres psql postgres <<EOF
+CREATE DATABASE hostdb;
+CREATE USER kea WITH PASSWORD 'keadhcp';
+GRANT ALL PRIVILEGES ON DATABASE hostdb TO kea;
+\c hostdb
+GRANT ALL PRIVILEGES ON SCHEMA public TO kea;
+\q
+EOF
+
+echo "Database 'hostdb' and user 'kea' created with necessary privileges."
+
+# Find the PostgreSQL version
+PG_VERSION=$(psql --version | awk '{print $3}' | cut -d '.' -f1,2)
+
+# Edit the pg_hba.conf file
+echo "Step 11: Configuring pg_hba.conf for password authentication..."
+
+sudo sed -i "s/local   all             all                                     peer/local   all             all                                     md5/" /etc/postgresql/$PG_VERSION/main/pg_hba.conf
+
+echo "pg_hba.conf updated to use md5 authentication."
+
+# Restart PostgreSQL service
+sudo systemctl restart postgresql
+echo "PostgreSQL restarted with updated authentication method."
+
+# Load the database schema
+echo "Step 12: Loading the DHCP database schema..."
+psql -d hostdb -U kea -f /home/gxtreme/kea/dhcpdb_create.pgsql
+
+echo "Database schema loaded successfully."
+
+echo "ISC Kea DHCP4 and PostgreSQL setup complete."
