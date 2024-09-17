@@ -103,66 +103,27 @@ echo "Kea DHCP4 server restarted."
 
 # Create the Python script for adding host reservations
 echo "Step 7: Creating the Python script for host reservations..."
-cat <<EOT > /etc/kea/add.py
-import psycopg2
+cat <<EOT > /etc/kea/add.sql
+START TRANSACTION;
+\set ipv4_reservation '192.0.2.4'
+\set hostname   'myhost.example.org'
+\set identifier_type 'hw-address'
+\set identifier_value '10:20:30:40:50:60'
+\set dhcp4_subnet_id 1
 
-def insert_host_reservation(identifier_value, identifier_type, dhcp4_subnet_id, ipv4_reservation, hostname):
-    try:
-        connection = psycopg2.connect(
-            user="kea",
-            password="keadhcp",
-            host="localhost",
-            port="5432",
-            database="hostdb"
-        )
-        cursor = connection.cursor()
-
-        insert_query = """
-        INSERT INTO hosts (
-            dhcp_identifier,
-            dhcp_identifier_type,
-            dhcp4_subnet_id,
-            ipv4_address,
-            hostname,
-            dhcp4_next_server
-        ) VALUES (
-            DECODE(REPLACE(%s, ':', ''), 'hex'),
-            (SELECT type FROM host_identifier_type WHERE name=%s),
-            %s,
-            %s::inet - '0.0.0.0'::inet,
-            %s,
-            '0.0.0.0'::inet - '0.0.0.0'::inet
-        );
-        """
-        cursor.execute(insert_query, (
-            identifier_value,
-            identifier_type,
-            dhcp4_subnet_id,
-            ipv4_reservation,
-            hostname
-        ))
-
-        connection.commit()
-        print("Record inserted successfully into kea_dhcp_reservations table")
-
-    except (Exception, psycopg2.Error) as error:
-        print("Failed to insert record into kea_dhcp_reservations table", error)
-
-    finally:
-        if connection:
-            cursor.close()
-            connection.close()
-            print("PostgreSQL connection is closed")
-
-insert_host_reservation(
-    '01:1c:61:b4:3c:11:ef',
-    'client-id',
-    40011,
-    '10.20.0.211',
-    'testlabG12C'
-)
+INSERT INTO hosts (dhcp_identifier,
+                   dhcp_identifier_type,
+                   dhcp4_subnet_id,
+                   ipv4_address,
+                   hostname)
+VALUES (DECODE(REPLACE(:'identifier_value', ':', ''), 'hex'),
+        (SELECT type FROM host_identifier_type WHERE name=:'identifier_type'),
+        :dhcp4_subnet_id,
+        (SELECT (:'ipv4_reservation'::inet - '0.0.0.0'::inet)),
+        :'hostname');
+COMMIT;
 EOT
-echo "Python script created."
+echo "script created."
 
 # Make the Python script executable
 chmod +x /etc/kea/add.py
