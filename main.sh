@@ -13,7 +13,8 @@ echo "Step 2: Adding ISC Kea repository and installing DHCP4 server..."
 curl -1sLf 'https://dl.cloudsmith.io/public/isc/kea-2-6/setup.deb.sh' | sudo -E bash
 apt install isc-kea-dhcp4-server -y
 echo "ISC Kea DHCP4 server installed."
-
+echo "install kea-admin-tools."
+apt install isc-kea-admin -y
 # Backup the original Kea DHCP4 configuration
 echo "Step 3: Backing up the existing configuration..."
 cd /etc/kea/
@@ -210,7 +211,7 @@ PG_VERSION=$(psql --version | awk '{print $3}' | cut -d '.' -f1,2)
 # Edit the pg_hba.conf file
 echo "Step 11: Configuring pg_hba.conf for password authentication..."
 
-sudo sed -i "s/local   all             all                                     peer/local   all             all                                     md5/" /etc/postgresql/$PG_VERSION/main/pg_hba.conf
+sudo sed -i "s/local   all             all                                     peer/local   all             all                                     md5/" /etc/postgresql/16/main/pg_hba.conf
 
 echo "pg_hba.conf updated to use md5 authentication."
 
@@ -220,7 +221,7 @@ echo "PostgreSQL restarted with updated authentication method."
 
 # Load the database schema
 echo "Step 12: Loading the DHCP database schema..."
-psql -d hostdb -U kea -f /home/gxtreme/kea/dhcpdb_create.pgsql
+psql -d hostdb -U kea -f /usr/share/kea/scripts/pgsql/dhcpdb_create.pgsql
 
 echo "Database schema loaded successfully."
 
